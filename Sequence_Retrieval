@@ -9,9 +9,7 @@ nohup crabs db_download --source ncbi --database nucleotide --query '("Viridipla
 # Download RefSeq Sequences {RefSeq(2,110,972)}
 
 nohup crabs db_download --source ncbi --database nucleotide --query '("Viridiplantae"[Organism] OR ("Viridiplantae"[Organism] OR Viridiplantae[All Fields])) AND (biomol_genomic[PROP] AND refseq[filter] AND is_nuccore[filter]) AND ("0001/01/01"[MDAT] : "2018/12/31"[MDAT])' --output refseq-1-viridiplantae_June2024.fasta --keep_original yes --email oskuddar@ncsu.edu --batchsize 5000 &
-
 nohup crabs db_download --source ncbi --database nucleotide --query '("Viridiplantae"[Organism] OR Viridiplantae[All Fields]) AND (biomol_genomic[PROP] AND refseq[filter] AND ("2018/12/30"[MDAT] : "2021/12/30"[MDAT]))' --output refseq-2-viridiplantae_June2024.fasta --keep_original yes --email oskuddar@ncsu.edu --batchsize 5000 &
-
 nohup crabs db_download --source ncbi --database nucleotide --query '("Viridiplantae"[Organism] OR Viridiplantae[All Fields]) AND (biomol_genomic[PROP] AND refseq[filter] AND ("2021/12/29"[MDAT] : "2024/12/30"[MDAT]))' --output refseq-3-viridiplantae_June2024.fasta --keep_original yes --email oskuddar@ncsu.edu --batchsize 5000 &
 
 # Download GenBank Sequences {GenBank(6,914,516)}
