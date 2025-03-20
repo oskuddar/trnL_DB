@@ -1,0 +1,5 @@
+# Download EMBL Sequences {EMBL(4,792,161)}
+
+("Viridiplantae"[Organism] OR Viridiplantae[All Fields]) AND (biomol_genomic[PROP] AND embl[filter] AND is_nuccore[filter])
+
+nohup crabs db_download --source ncbi --database nucleotide --query '("Viridiplantae"[Organism] OR Viridiplantae[All Fields]) AND (biomol_genomic[PROP] AND embl[filter] AND is_nuccore[filter])' --output embl-viridiplantae_June2024.fasta --keep_original yes --email oskuddar@ncsu.edu --batchsize 5000 &
