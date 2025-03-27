@@ -52,3 +52,4 @@ qiime tools export \
   --input-path /directory/fasta_reference_seq_extracted.qza
   --output-path /directory/fasta_reference_seq_extracted
 ```
+.
