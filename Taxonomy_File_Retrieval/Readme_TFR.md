@@ -17,5 +17,5 @@ EU940009.1
 EU940005.1
 EU940000.1
 ```
-**Clean the taxonomy file with Clean_tax.md (python code)**
+**Clean the taxonomy file (from symbols and binary species name -except for hybrids-) with Clean_tax.md (python code)**
 .
