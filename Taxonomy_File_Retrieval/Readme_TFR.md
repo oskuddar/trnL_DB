@@ -17,4 +17,5 @@ EU940009.1
 EU940005.1
 EU940000.1
 ```
+**Clean the taxonomy file with Clean_tax.md (python code)**
 .
