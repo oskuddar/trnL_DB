@@ -1,4 +1,6 @@
 **Clean the taxonomy file if needed**
+\
+*(use python)*
 
 ```{python}
 import pandas as pd
