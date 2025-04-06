@@ -13,6 +13,8 @@ wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/taxdmp_2024-08-01
 cd /path/taxdump_aug2024
 tar -czf /path/taxdump_aug2024.tar.gz *
 ```
+Download both "wgs" and "gb" accession2taxid files from (accession2taxid) [https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/accession2taxid/]
+----------------------*Unfortunately, older versions are not available on NCBI.*----------------------
 
 Create the NCBI taxID and taxonomy database on your local computer, and use accession numbers to search for the taxID and seven-level taxonomy information.
 
@@ -21,12 +23,15 @@ from ete3 import NCBITaxa
 import csv
 import gzip
 
-#ncbi = NCBITaxa(dbfile="/path/taxa_2024_08.sqlite", taxdump_file="/path/taxdump_aug2024.tar.gz")
+ncbi = NCBITaxa(dbfile="/path/Taxonomy_Files/taxa_2025_04.sqlite")
 
+ACCESSION2TAXID_FILE = ""
 
-ncbi = NCBITaxa(dbfile="/path/taxa_2024_08.sqlite")
+ACCESSION2TAXID_FILES = [
+    "/path/Taxonomy_Files/nucl_gb.accession2taxid_April_2025.gz",
+    "/path/Taxonomy_Files/nucl_wgs.accession2taxid_April_2025.gz"
+]
 
-ACCESSION2TAXID_FILE = "/path/nucl_gb.accession2taxid_August_2024.gz"
 ACCESSION_INPUT = "/path/accessions.txt"
 OUTPUT_CSV = "/path/accessions_local_taxid_DB_August_2024.csv"
 
@@ -47,6 +52,26 @@ def load_needed_taxids(filepath, needed_accession_bases):
 
                 if len(acc2taxid) == len(needed_accession_bases):
                     break
+    return acc2taxid
+
+def load_needed_taxids_from_multiple(files, needed_accession_bases):
+    acc2taxid = {}
+    for filepath in files:
+        with gzip.open(filepath, "rt") as f:
+            for line in f:
+                if line.startswith("accession"):
+                    continue
+                parts = line.strip().split("\t")
+                if len(parts) >= 3:
+                    acc = parts[0].strip()
+                    taxid = parts[2].strip()
+                    acc_base = acc.split(".")[0]
+
+                    if acc_base in needed_accession_bases and acc_base not in acc2taxid:
+                        acc2taxid[acc_base] = taxid
+
+                    if len(acc2taxid) == len(needed_accession_bases):
+                        return acc2taxid
     return acc2taxid
 
 def get_taxonomy_info(accession_number_with_version, acc2taxid, ncbi):
@@ -74,7 +99,7 @@ def main():
         accession_numbers = [line.strip() for line in f if line.strip()]
     accession_bases = set(acc.split(".")[0] for acc in accession_numbers)
 
-    acc2taxid = load_needed_taxids(ACCESSION2TAXID_FILE, accession_bases)
+    acc2taxid = load_needed_taxids_from_multiple(ACCESSION2TAXID_FILES, accession_bases)
 
     print(f"Found {len(acc2taxid)} / {len(accession_bases)} accessions with taxids.")
 
@@ -90,6 +115,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 ```
 
 
