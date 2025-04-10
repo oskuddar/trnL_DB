@@ -65,6 +65,11 @@ filtered_df = filtered_df[~(filtered_df['Genus'].isna() & filtered_df['Species']
 keywords = ["environmental", "uncultured", "unclassified", "unidentified", "unverified", "nan mycorrhizal", "nan sp", "nan Chlorophyta", "nan bequaertii","nan Ceiba","nan Cylindrocystis", "nan environmental", "nan Klebsormidium", "nan plant", "nan poilanei", "nan prasinophyte", "nan Streptophyta"]
 filtered_df = filtered_df[~filtered_df.apply(lambda row: any(keyword in str(row).lower() for keyword in keywords), axis=1)]
 
+# OPTIONAL: Remove the rows if the species name`s first word is not in Genus or Family
+#filtered_df = filtered_df[
+#    filtered_df['Species'].str.split().str[0].fillna('').isin(filtered_df['Genus'].fillna('').tolist() + #filtered_df['Family'].fillna('').tolist())
+#]
+
 # Save the filtered DataFrame to a new CSV file
 filtered_df.to_csv(output_file, index=False)
 
