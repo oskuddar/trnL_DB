@@ -35,78 +35,79 @@ ACCESSION2TAXID_FILES = [
 ACCESSION_INPUT = "/path/accessions.txt"
 OUTPUT_CSV = "/path/accessions_local_taxid_DB_August_2024.csv"
 
+# --- Efficient TaxID loader ---
 def load_needed_taxids(filepath, needed_accession_bases):
     acc2taxid = {}
+    needed = set(needed_accession_bases)  # Make mutable
     with gzip.open(filepath, "rt") as f:
         for line in f:
             if line.startswith("accession"):
                 continue
             parts = line.strip().split("\t")
             if len(parts) >= 3:
-                acc = parts[0].strip()
-                taxid = parts[2].strip()
-                acc_base = acc.split(".")[0]
-
-                if acc_base in needed_accession_bases and acc_base not in acc2taxid:
-                    acc2taxid[acc_base] = taxid
-
-                if len(acc2taxid) == len(needed_accession_bases):
-                    break
+                acc_base = parts[0].split(".")[0]
+                if acc_base in needed:
+                    acc2taxid[acc_base] = parts[2].strip()
+                    needed.remove(acc_base)
+                    if not needed:
+                        break
     return acc2taxid
 
 def load_needed_taxids_from_multiple(files, needed_accession_bases):
     acc2taxid = {}
+    needed = set(needed_accession_bases)
     for filepath in files:
-        with gzip.open(filepath, "rt") as f:
-            for line in f:
-                if line.startswith("accession"):
-                    continue
-                parts = line.strip().split("\t")
-                if len(parts) >= 3:
-                    acc = parts[0].strip()
-                    taxid = parts[2].strip()
-                    acc_base = acc.split(".")[0]
-
-                    if acc_base in needed_accession_bases and acc_base not in acc2taxid:
-                        acc2taxid[acc_base] = taxid
-
-                    if len(acc2taxid) == len(needed_accession_bases):
-                        return acc2taxid
+        acc2taxid.update(load_needed_taxids(filepath, needed))
+        needed -= set(acc2taxid.keys())
+        if not needed:
+            break
     return acc2taxid
 
-def get_taxonomy_info(accession_number_with_version, acc2taxid, ncbi):
+# --- Cached lineage lookup ---
+@lru_cache(maxsize=10000)
+def get_cached_lineage(taxid):
+    lineage = ncbi.get_lineage(taxid)
+    names = ncbi.get_taxid_translator(lineage)
+    ranks = ncbi.get_rank(lineage)
+    return lineage, names, ranks
+
+# --- Per-accession taxonomy row ---
+def get_taxonomy_info(accession_number_with_version, acc2taxid):
     acc_base = accession_number_with_version.split(".")[0]
-    taxid = acc2taxid.get(acc_base)
-    if not taxid:
+    taxid_str = acc2taxid.get(acc_base)
+    if not taxid_str:
         return [accession_number_with_version] + [None] * 7 + [None]
     try:
-        lineage = ncbi.get_lineage(int(taxid))
-        names = ncbi.get_taxid_translator(lineage)
-        ranks = ncbi.get_rank(lineage)
+        taxid = int(taxid_str)
+        lineage, names, ranks = get_cached_lineage(taxid)
         desired_ranks = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species']
-        taxonomy_info = [accession_number_with_version]
+        row = [accession_number_with_version]
         for rank in desired_ranks:
-            matched_taxids = [tid for tid in lineage if ranks.get(tid) == rank]
-            taxonomy_info.append(names.get(matched_taxids[0]) if matched_taxids else None)
-        taxonomy_info.append(taxid)
-        return taxonomy_info
+            matched = [tid for tid in lineage if ranks.get(tid) == rank]
+            row.append(names.get(matched[0]) if matched else None)
+        row.append(taxid)
+        return row
     except Exception as e:
-        print(f"Error fetching taxonomy for {accession_number_with_version}: {e}")
-        return [accession_number_with_version] + [None] * 7 + [taxid]
+        print(f"Error with {accession_number_with_version}: {e}")
+        return [accession_number_with_version] + [None] * 7 + [taxid_str]
 
+# --- Main ---
 def main():
     with open(ACCESSION_INPUT, 'r') as f:
         accession_numbers = [line.strip() for line in f if line.strip()]
     accession_bases = set(acc.split(".")[0] for acc in accession_numbers)
 
     acc2taxid = load_needed_taxids_from_multiple(ACCESSION2TAXID_FILES, accession_bases)
-
     print(f"Found {len(acc2taxid)} / {len(accession_bases)} accessions with taxids.")
 
+    seen = set()
     taxonomy_data = []
     for acc in accession_numbers:
-        tax_info = get_taxonomy_info(acc, acc2taxid, ncbi)
-        taxonomy_data.append(tax_info)
+        row = get_taxonomy_info(acc, acc2taxid)
+        t = tuple(row)
+        if t not in seen:
+            taxonomy_data.append(row)
+            seen.add(t)
 
     with open(OUTPUT_CSV, 'w', newline='') as f:
         writer = csv.writer(f)
