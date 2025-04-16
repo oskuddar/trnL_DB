@@ -106,7 +106,7 @@ print(f"Unfound accessions: {len(unfound_accessions)}")
 
 ```
 \
-**Create a taxonomy file for each fasta folder**
+**Create a taxonomy file for each fasta file**
 
 ```{python}
 import os
