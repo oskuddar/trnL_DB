@@ -22,6 +22,7 @@ Create the NCBI taxID and taxonomy database on your local computer, and use acce
 from ete3 import NCBITaxa
 import csv
 import gzip
+from functools import lru_cache
 
 ncbi = NCBITaxa(dbfile="/path/Taxonomy_Files/taxa_2025_04.sqlite")
 
