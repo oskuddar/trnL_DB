@@ -34,7 +34,7 @@ ACCESSION2TAXID_FILES = [
 ]
 
 ACCESSION_INPUT = "/path/accessions.txt"
-OUTPUT_CSV = "/path/accessions_local_taxid_DB_August_2024.csv"
+OUTPUT_CSV = "/path/accessions_local_taxid_DB_April_2025.csv"
 
 # --- Efficient TaxID loader ---
 def load_needed_taxids(filepath, needed_accession_bases):
