@@ -18,6 +18,35 @@ Download both "wgs" and "gb" accession2taxid files from (accession2taxid) [https
 
 Create the NCBI taxID and taxonomy database on your local computer, and use accession numbers to search for the taxID and seven-level taxonomy information.
 
+**Create txt file (contains accession numbers) from a fasta file:**
+
+```{python}
+from Bio import SeqIO
+import os
+
+# Input FASTA file
+input_fasta = "path/to/input_file.fasta"
+
+# Output text file
+output_txt = "path/to/unique_headers.txt"
+
+# Ensure input file exists
+if not os.path.exists(input_fasta):
+    raise FileNotFoundError(f"Input FASTA file not found: {input_fasta}")
+
+# Collect unique headers
+unique_headers = {record.id for record in SeqIO.parse(input_fasta, "fasta")}
+
+# Write unique headers to text file
+with open(output_txt, "w") as out_f:
+    for header in sorted(unique_headers):
+        out_f.write(header + "\n")
+
+print(f"Unique headers written to: {output_txt}")
+
+```
+----------
+
 ```{python}
 from ete3 import NCBITaxa
 import csv
