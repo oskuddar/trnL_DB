@@ -212,8 +212,8 @@ from Bio import SeqIO
 # Input file paths
 fasta_files = [
     "All_trnl_CD_uppercase_cleaned_filtered.fasta",
-    "All_trnl_CD_uppercase_cleaned_filtered.fasta",
-    "All_trnl_CD_uppercase_cleaned_filtered.fasta",
+    "All_trnl_CH_uppercase_cleaned_filtered.fasta",
+    "All_trnl_GH_uppercase_cleaned_filtered.fasta",
 ]
 min_lengths = [234, 81, 8]
 max_lengths = [1566, 484, 220]
