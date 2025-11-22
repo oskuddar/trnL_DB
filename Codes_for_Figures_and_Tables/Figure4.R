@@ -42,32 +42,61 @@ create_venn <- function(file_path, region_label, tax_level_col) {
       cat.cex = 2.2,
       cat.pos = c(-20, 20, 180),
       cat.dist = c(0.08, 0.08, 0.05),
-      cat.fontface = 2,
+      cat.fontface = 1,
       main = region_label
     )
     grid.draw(venn.plot)
   })
 }
 
+library(gridtext)
 
+add_title <- function(grob, region_label) {
+  grid.arrange(
+    richtext_grob(
+      text = paste0("<b><i>trnL</i></b> <b>", region_label, "</b>"),
+      hjust = 0.5,
+      gp = gpar(fontsize = 25)
+    ),
+    grob,
+    ncol = 1,
+    heights = c(0.2, 0.8)
+  )
+}
 
 # ---- SPECIES ----
 venn_CD_species <- create_venn(file_paths$CD, "trnL CD", Species)
 venn_CH_species <- create_venn(file_paths$CH, "trnL CH", Species)
 venn_GH_species <- create_venn(file_paths$GH, "trnL GH", Species)
-species_venn <- grid.arrange(venn_CD_species, venn_CH_species, venn_GH_species, ncol = 3)
+species_venn <- grid.arrange(
+  add_title(venn_CD_species, "CD"),
+  add_title(venn_CH_species, "CH"),
+  add_title(venn_GH_species, "GH"),
+  ncol = 3
+)
 
 # ---- GENUS ----
 venn_CD_genus <- create_venn(file_paths$CD, "trnL CD", Genus)
 venn_CH_genus <- create_venn(file_paths$CH, "trnL CH", Genus)
 venn_GH_genus <- create_venn(file_paths$GH, "trnL GH", Genus)
-genus_venn <- grid.arrange(venn_CD_genus, venn_CH_genus, venn_GH_genus, ncol = 3)
+genus_venn <- grid.arrange(
+  add_title(venn_CD_genus, "CD"),
+  add_title(venn_CH_genus, "CH"),
+  add_title(venn_GH_genus, "GH"),
+  ncol = 3
+)
 
 # ---- FAMILY ----
 venn_CD_family <- create_venn(file_paths$CD, "trnL CD", Family)
 venn_CH_family <- create_venn(file_paths$CH, "trnL CH", Family)
 venn_GH_family <- create_venn(file_paths$GH, "trnL GH", Family)
-family_venn <- grid.arrange(venn_CD_family, venn_CH_family, venn_GH_family, ncol = 3)
+family_venn <- grid.arrange(
+  add_title(venn_CD_family, "CD"),
+  add_title(venn_CH_family, "CH"),
+  add_title(venn_GH_family, "GH"),
+  ncol = 3
+)
+
 
 # ---- SAVE SPECIES ----
 pdf("./Figure4.pdf", width = 20, height = 6)
