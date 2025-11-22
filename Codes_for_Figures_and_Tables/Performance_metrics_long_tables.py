@@ -8,7 +8,7 @@ import pandas as pd
 # --- CONFIG ---
 base_path = "./summary" #Folder
 regions = ["CD", "CH", "GH"]
-n_total = 3000  # total entries for FC calculation
+n_total = 3000  # total entries 
 
 
 # --- PARSERS ---
@@ -35,7 +35,7 @@ def parse_tool(filename_or_value):
     elif "metacurator" in text:
         return "MetaCurator"
     else:
-        return "Unknown"
+        return "Unknown" #safety pin
 
 
 def compute_metrics(row, level):
