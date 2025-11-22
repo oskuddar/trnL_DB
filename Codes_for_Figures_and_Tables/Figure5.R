@@ -77,16 +77,25 @@ p_gh_fc <- panel_plot(gh_summary, "FC", "FC", hide_y = TRUE,  show_xlab = FALSE)
 p_gh_p <- panel_plot(gh_summary, "P", "P", hide_y = TRUE,  show_xlab = FALSE)
 p_gh_r  <- panel_plot(gh_summary, "R",  "R",  hide_y = TRUE,  show_xlab = FALSE)
 
-# ---------- headers (italic trnL) ----------
+# ---------- headers (italic & bold trnL) ----------
+library(ggtext)
 h_cd <- ggplot() + theme_void() +
-  ggtitle(expression(italic("trnL")~"CD")) +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18, vjust = -6))
+  ggtitle("**<i>trnL</i> CD**") +
+  theme(
+    plot.title = element_markdown(hjust = 0.5, size = 18, vjust = -6)
+  )
+
 h_ch <- ggplot() + theme_void() +
-  ggtitle(expression(italic("trnL")~"CH")) +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18, vjust = -6))
+  ggtitle("**<i>trnL</i> CH**") +
+  theme(
+    plot.title = element_markdown(hjust = 0.5, size = 18, vjust = -6)
+  )
+
 h_gh <- ggplot() + theme_void() +
-  ggtitle(expression(italic("trnL")~"GH")) +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18, vjust = -6))
+  ggtitle("**<i>trnL</i> GH**") +
+  theme(
+    plot.title = element_markdown(hjust = 0.5, size = 18, vjust = -6)
+  )
 
 # ---------- layout: headers row spans 3 cols each; then nine panels ----------
 design_map <- "
