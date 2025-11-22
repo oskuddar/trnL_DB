@@ -15,3 +15,6 @@
 **CH** = _trnL_ CH
 
 **GH** = _trnL_ GH
+
+----------------------------------------
+**Note:** These files were used to calculate performance metrics (Fraction classified, Precision, Recall)
