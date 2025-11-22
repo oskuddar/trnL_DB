@@ -17,10 +17,7 @@
 **GH** = _trnL_ GH
 
 ----------------------------------------
-**Notes:** 
+**Note:** 
 
-
-1. These files were used to calculate performance metrics (Fraction classified, Precision, Recall)
-
-2. In each file, under the "File" column, there is a duplication for RESCRIPt (“mutated_mutated”). The code provided for generating figures and tables accounts for this discrepancy.
+These files were used to calculate performance metrics (Fraction classified, Precision, Recall)
 
