@@ -1,0 +1,169 @@
+---
+title: "USDA_DB"
+output: html_document
+author: "Ozge Shera Kuddar"
+---
+
+```{r setup, include=FALSE}
+library(reticulate)
+knitr::opts_chunk$set(engine = "python", python.reticulate.autoprint = FALSE)
+```
+
+# 1. Donwloaded each state data (https://plants.usda.gov/home/stateSearch)
+# 2. Combine and keep the unique entries (All_States_USDA_data.csv)
+# 3. Generate binomial scientific name (All_States_USDA_Scientific_Name.csv)
+
+```{r, engine='python'} 
+import pandas as pd
+import glob
+
+# Define the path to the CSV files
+path = "./USDA_DB/State_csv_files/*.csv"
+
+# Define the header columns for the final CSV
+final_columns = ["Accepted Symbol", "Scientific Name", "Common Name"]
+
+# Initialize an empty DataFrame for storing unique rows
+final_df = pd.DataFrame(columns=final_columns)
+
+# Loop through each CSV file
+for file in glob.glob(path):
+    # Read the CSV file, skipping the first two rows, and selecting only the required columns
+    df = pd.read_csv(file, skiprows=2, usecols=[0, 2, 3], header=None)
+    df.columns = final_columns
+
+    # Append the unique rows to the final DataFrame
+    final_df = pd.concat([final_df, df]).drop_duplicates()
+
+# Write the final DataFrame to a CSV file
+final_df.to_csv("./USDA_DB/All_States_USDA_data.csv", index=False)
+
+# Function to process the Scientific Name column
+def process_scientific_name(name):
+    # Add a space after "×" if not already present
+    name = name.replace("×", "x ")
+    
+    # Split the name into words
+    words = name.split()
+
+    # Keep only the first 2 words, or 3 if the second word is "×"
+    if len(words) > 2 and words[1] == "x":
+        return " ".join(words[:3])
+    else:
+        return " ".join(words[:2])
+
+# Apply the function to the Scientific Name column
+final_df['Scientific Name'] = final_df['Scientific Name'].apply(process_scientific_name)
+
+# Remove duplicate species names to ensure uniqueness
+final_scientific_name_df = final_df[['Scientific Name']].drop_duplicates()
+
+# Write the new DataFrame with unique Scientific Names to a CSV file
+final_scientific_name_df.to_csv("./USDA_DB/All_States_USDA_Scientific_Name.csv", index=False)
+
+```
+
+
+# Get the taxid and taxonomy (R) 
+
+```{R}
+
+# Load the necessary library
+library(taxizedb)
+
+# Read the CSV file containing only the Scientific Name column
+scientific_names <- read.csv("./USDA_DB/All_States_USDA_Scientific_Name.csv")
+
+# Define the path to your local NCBI taxdump files
+taxdump_path <- "./taxdumpAug2024.tar.gz" # Download the taxdump file of your choice
+
+a <- as.data.frame(name2taxid(scientific_names$Scientific.Name, db = "ncbi", path = taxdump_path, out_type = 'summary'))
+duplicates <- a[duplicated(a$name) | duplicated(a$name, fromLast = TRUE), ]
+
+# Identify which Scientific.Name are missing in the 'a' dataframe
+missing_names <- scientific_names[!(scientific_names$Scientific.Name %in% a$name), ]
+
+# Save the new dataframe with the missing names to a text file
+write.table(missing_names, "./USDA_DB/Missing_Scientific_Names.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+missing_names <- as.data.frame(missing_names)
+first_word_df <- data.frame(First.Word = unique(sapply(strsplit(missing_names$missing_names, " "), `[`, 1)))
+b <- as.data.frame(name2taxid(first_word_df$First.Word, db = "ncbi", path = taxdump_path, out_type = 'summary'))
+duplicates <- b[duplicated(b$name) | duplicated(b$name, fromLast = TRUE), ]
+
+# Rename the columns
+colnames(a) <- c("Species", "TaxID")
+
+# Save the dataframe as a CSV file
+write.csv(a, "./USDA_DB/Species_TaxID.csv", row.names = FALSE)
+
+
+
+# Create taxonomy
+
+# Assume your dataframe is named 'a' and has a column 'TaxID'
+# Initialize an empty list to store taxonomy information
+taxonomy_info <- list()
+
+# Loop through each TaxID in the dataframe and get the classification
+for (i in 1:nrow(a)) {
+  taxid <- a$TaxID[i]
+  
+  # Get the classification for the given TaxID
+  classification_result <- classification(taxid, db = "ncbi")
+  
+  # Initialize variables for each rank
+  kingdom <- NA
+  phylum <- NA
+  class <- NA
+  order <- NA
+  family <- NA
+  genus <- NA
+  species <- NA
+  
+  # Check if the classification_result is not NULL and assign ranks
+  if (!is.null(classification_result)) {
+    if ("kingdom" %in% classification_result[[1]]$rank) {
+      kingdom <- classification_result[[1]]$name[classification_result[[1]]$rank == "kingdom"]
+    }
+    if ("phylum" %in% classification_result[[1]]$rank) {
+      phylum <- classification_result[[1]]$name[classification_result[[1]]$rank == "phylum"]
+    }
+    if ("class" %in% classification_result[[1]]$rank) {
+      class <- classification_result[[1]]$name[classification_result[[1]]$rank == "class"]
+    }
+    if ("order" %in% classification_result[[1]]$rank) {
+      order <- classification_result[[1]]$name[classification_result[[1]]$rank == "order"]
+    }
+    if ("family" %in% classification_result[[1]]$rank) {
+      family <- classification_result[[1]]$name[classification_result[[1]]$rank == "family"]
+    }
+    if ("genus" %in% classification_result[[1]]$rank) {
+      genus <- classification_result[[1]]$name[classification_result[[1]]$rank == "genus"]
+    }
+    if ("species" %in% classification_result[[1]]$rank) {
+      species <- classification_result[[1]]$name[classification_result[[1]]$rank == "species"]
+    }
+  }
+  
+  # Store the taxonomy information in the list
+  taxonomy_info[[i]] <- data.frame(
+    TaxID = taxid,
+    Kingdom = kingdom,
+    Phylum = phylum,
+    Class = class,
+    Order = order,
+    Family = family,
+    Genus = genus,
+    Species = species
+  )
+}
+
+# Combine the taxonomy information into a single dataframe
+taxonomy_df <- do.call(rbind, taxonomy_info)
+
+# Save the taxonomy information to a CSV file
+write.csv(taxonomy_df, "./USDA_DB/USDA_Taxonomy_Only_for_Species_exist.csv", row.names = FALSE)
+
+
+```
