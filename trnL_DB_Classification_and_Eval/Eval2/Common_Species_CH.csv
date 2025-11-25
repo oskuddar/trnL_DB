@@ -1,0 +1,4 @@
+Tool,Species_C,Species_M,Species_U,Species_FC,Species_P,Species_R,Genus_C,Genus_M,Genus_U,Genus_FC,Genus_P,Genus_R,Family_C,Family_M,Family_U,Family_FC,Family_P,Family_R
+Obitools,734,653,1613,0.462,0.529,0.245,1655,245,1100,0.633,0.871,0.552,2924,9,67,0.978,0.997,0.975
+Rescript,690,689,1621,0.46,0.5,0.23,1620,210,1170,0.61,0.885,0.54,2875,19,106,0.965,0.993,0.958
+Metacurator,652,298,2050,0.317,0.686,0.217,1548,123,1329,0.557,0.926,0.516,2970,10,20,0.993,0.997,0.99

@@ -1,0 +1,17 @@
+Taxonomic Level,Class,Order,Family,Genus,Species
+OBITools3,22,136,665,10901,75710
+RESCRIPt,12,94,440,8486,57155
+Metacurator,14,105,471,8237,49812
+Shared between OBITools3 & RESCRIPt,12,93,434,8308,52630
+Shared between OBITools3 & Metacurator,14,104,465,8052,47168
+Shared between RESCRIPt & Metacurator,11,89,401,7187,41393
+Shared across all databases,11,88,398,7108,39738
+Unique to OBITools3,7,27,164,1649,15650
+Unique to RESCRIPt,0,0,3,99,2870
+Unique to Metacurator,0,0,3,106,989
+Present in OBITools3 but absent in RESCRIPt,10,43,231,2593,23080
+Present in OBITools3 but absent in Metacurator,8,32,200,2849,28542
+Present in RESCRIPt but absent in Metacurator,1,5,39,1299,15762
+Present in RESCRIPt but absent in OBITools3,0,1,6,178,4525
+Present in Metacurator but absent in OBITools3,0,1,6,185,2644
+Present in Metacurator but absent in RESCRIPt,3,16,70,1050,8419
