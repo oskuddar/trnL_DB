@@ -1,0 +1,447 @@
+---
+title: "Figures"
+output: html_document
+author: "Ozge Shera Kuddar"
+---
+
+```{r setup, include=FALSE}
+library(reticulate)
+knitr::opts_chunk$set(engine = "python", python.reticulate.autoprint = FALSE)
+```
+
+# Figure 1 is adapted from [Taberlet, 2007], does not require a code.
+# Figure 2 does not require a code.
+
+# Figure 3. Raw and curated trnL sequence length distributions across curation tools.
+# Figure 3 requires both raw and curated sequences; due to file size, raw sequences are not included.
+
+```{R}
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(Biostrings)
+library(patchwork)
+library(grid)
+library(cowplot)
+
+
+file_list_all_tools <- list(
+  "./Obi_All_trnl_CD_raw_Aug_2024.fasta",
+  "./Obitools_trnl_CD_Final_Aug_2024.fasta",
+  "./Obi_All_trnl_CH_raw_Aug_2024.fasta",
+  "./Obitools_trnl_CH_Final_Aug_2024.fasta",
+  "./Obi_All_trnl_GH_raw_Aug_2024.fasta",
+  "./Obitools_trnl_GH_Final_Aug_2024.fasta",
+  
+  "./All_rescript_trnl_cd_raw_Aug_2024.fasta",
+  "./Rescript_trnl_CD_Final_Aug_2024.fasta",
+  "./All_rescript_trnl_ch_raw_Aug_2024.fasta",
+  "./Rescript_trnl_CH_Final_Aug_2024.fasta",
+  "./All_rescript_trnl_gh_raw_Aug_2024.fasta",
+  "./Rescript_trnl_GH_Final_Aug_2024.fasta",
+  
+  "./Metacurator_trnl_CD_raw_Aug_2024.fasta",
+  "./Metacurator_trnl_CD_Final_Aug_2024.fasta",
+  "./Metacurator_trnl_CH_raw_Aug_2024.fasta",
+  "./Metacurator_trnl_CH_Final_Aug_2024.fasta",
+  "./Metacurator_trnl_GH_raw_Aug_2024.fasta",
+  "./Metacurator_trnl_GH_Final_Aug_2024.fasta"
+)
+
+extract_lengths_by_file <- function(path_input) {
+  seqs_input <- readDNAStringSet(path_input)
+  data.frame(
+    File = basename(path_input),
+    Length = width(seqs_input),
+    stringsAsFactors = FALSE
+  )
+}
+
+
+
+# ----------------------------------
+# 1. CREATE combined_lengths
+# ----------------------------------
+
+combined_lengths <- bind_rows(lapply(file_list_all_tools, function(fp) {
+  seqs <- readDNAStringSet(fp)
+  data.frame(
+    File = basename(fp),
+    Length = width(seqs),
+    stringsAsFactors = FALSE
+  )
+})) %>%
+  mutate(
+    Region = case_when(
+      grepl("trnl_cd", File, ignore.case = TRUE) ~ "CD",
+      grepl("trnl_ch", File, ignore.case = TRUE) ~ "CH",
+      grepl("trnl_gh", File, ignore.case = TRUE) ~ "GH"
+    ),
+    Curation = ifelse(grepl("final", File, ignore.case = TRUE), "Curated", "Raw"),
+    Tool = case_when(
+      grepl("obi", File, ignore.case = TRUE) ~ "OBITools3/ecoPCR",
+      grepl("rescript", File, ignore.case = TRUE) ~ "RESCRIPt",
+      grepl("metacurator", File, ignore.case = TRUE) ~ "MetaCurator"
+    ),
+    FillKey = paste0(Curation, "_", Region)
+  )
+
+# FORCE LEGEND ORDER (this fixes everything)
+combined_lengths$FillKey <- factor(
+  combined_lengths$FillKey,
+  levels = c(
+    "Raw_CD","Raw_CH","Raw_GH",
+    "Curated_CD","Curated_CH","Curated_GH"
+  )
+)
+
+# ----------------------------------
+# 2. COLORS
+# ----------------------------------
+
+color_map_trnl <- c(
+  "Raw_CD"     = "pink",
+  "Curated_CD" = "red",
+  "Raw_CH"     = "lightgreen",
+  "Curated_CH" = "darkgreen",
+  "Raw_GH"     = "lightblue",
+  "Curated_GH" = "darkblue"
+)
+
+# ----------------------------------
+# 3. SINGLE PANEL FUNCTION
+# ----------------------------------
+
+single_panel_plot <- function(tool_name) {
+  ggplot(combined_lengths %>% filter(Tool == tool_name),
+         aes(x = Length, fill = FillKey)) +
+    geom_histogram(binwidth = 3, alpha = 0.6, position = "identity") +
+    scale_fill_manual(
+      values = color_map_trnl,
+      labels = c(
+        "Raw_CD"     = expression("Raw " * italic(trnL) * " CD"),
+        "Raw_CH"     = expression("Raw " * italic(trnL) * " CH"),
+        "Raw_GH"     = expression("Raw " * italic(trnL) * " GH"),
+        "Curated_CD" = expression("Curated " * italic(trnL) * " CD"),
+        "Curated_CH" = expression("Curated " * italic(trnL) * " CH"),
+        "Curated_GH" = expression("Curated " * italic(trnL) * " GH")
+      ),
+      guide = guide_legend(nrow = 2, byrow = TRUE)
+    ) +
+    labs(title = tool_name, x = "", y = "", fill = "") +
+    scale_x_continuous(limits = c(0,1000), breaks = seq(0,1000,100)) +
+    scale_y_continuous(limits = c(0,10000), oob = scales::squish) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+      axis.text  = element_text(size = 12, face = "bold"),
+      legend.text  = element_text(size = 12, face = "bold"),
+      legend.position = "bottom"
+    )
+}
+
+# ----------------------------------
+# 4. BUILD THE PANELS
+# ----------------------------------
+
+plot_obitools    <- single_panel_plot("OBITools3/ecoPCR")
+plot_rescript    <- single_panel_plot("RESCRIPt")
+plot_metacurator <- single_panel_plot("MetaCurator")
+
+combined_plot <- (plot_obitools / plot_rescript / plot_metacurator) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+# ----------------------------------
+# 5. ADD SHARED Y-AXIS
+# ----------------------------------
+
+final_plot <- ggdraw() +
+  draw_label("Count", x = 0.02, y = 0.5, angle = 90,
+             fontface = "bold", size = 14) +
+  draw_plot(combined_plot, x = 0.06, y = 0, width = 0.94, height = 1)
+
+# ----------------------------------
+# 6. SHOW FINAL
+# ----------------------------------
+
+final_plot
+
+
+
+ggsave(
+  "./Figure3.pdf",
+  plot = final_plot,
+  dpi = 300,
+  width = 10,
+  height = 12
+)
+```
+
+# Figure 4. Number of unique species retained by each curation tool for each trnL region.
+# This code also generates the Venn diagrams shown in Supplementary Figures 2 and 3.
+
+```{R}
+library(VennDiagram)
+library(readr)
+library(dplyr)
+library(grid)
+library(gridExtra)
+
+# Input files
+file_paths <- list(
+  CD = "./Figure_Extra_Files/Taxonomic_Comparison_CD.csv",
+  CH = "./Figure_Extra_Files/Taxonomic_Comparison_CH.csv",
+  GH = "./Figure_Extra_Files/Taxonomic_Comparison_GH.csv"
+)
+
+# Function for any taxonomic level (Species, Genus, Family)
+create_venn <- function(file_path, region_label, tax_level_col) {
+  
+  df <- read_csv(file_path)
+  
+  obitools_count     <- df %>% filter(`Taxonomic Level` == "OBITools3") %>% pull({{tax_level_col}})
+  rescript_count     <- df %>% filter(`Taxonomic Level` == "RESCRIPt") %>% pull({{tax_level_col}})
+  metacurator_count  <- df %>% filter(`Taxonomic Level` == "Metacurator") %>% pull({{tax_level_col}})
+  
+  common_all         <- df %>% filter(`Taxonomic Level` == "Shared across all databases") %>% pull({{tax_level_col}})
+  common_ob_res      <- df %>% filter(`Taxonomic Level` == "Shared between OBITools3 & RESCRIPt") %>% pull({{tax_level_col}})
+  common_ob_meta     <- df %>% filter(`Taxonomic Level` == "Shared between OBITools3 & Metacurator") %>% pull({{tax_level_col}})
+  common_res_meta    <- df %>% filter(`Taxonomic Level` == "Shared between RESCRIPt & Metacurator") %>% pull({{tax_level_col}})
+  
+  grid.grabExpr({
+    venn.plot <- draw.triple.venn(
+      area1 = obitools_count,
+      area2 = rescript_count,
+      area3 = metacurator_count,
+      n12   = common_ob_res,
+      n13   = common_ob_meta,
+      n23   = common_res_meta,
+      n123  = common_all,
+      category = c("OBITools3/ecoPCR", "RESCRIPt", "MetaCurator"),
+      fill = c("#FFB100", "#648FFF", "#DC267F"),
+      alpha = 0.5,
+      lty = "blank",
+      cex = 2.2,
+      cat.cex = 2.2,
+      cat.pos = c(-20, 20, 180),
+      cat.dist = c(0.08, 0.08, 0.05),
+      cat.fontface = 1,
+      main = region_label
+    )
+    grid.draw(venn.plot)
+  })
+}
+
+library(gridtext)
+
+add_title <- function(grob, region_label) {
+  grid.arrange(
+    richtext_grob(
+      text = paste0("<b><i>trnL</i></b> <b>", region_label, "</b>"),
+      hjust = 0.5,
+      gp = gpar(fontsize = 25)
+    ),
+    grob,
+    ncol = 1,
+    heights = c(0.2, 0.8)
+  )
+}
+
+# ---- SPECIES ----
+venn_CD_species <- create_venn(file_paths$CD, "trnL CD", Species)
+venn_CH_species <- create_venn(file_paths$CH, "trnL CH", Species)
+venn_GH_species <- create_venn(file_paths$GH, "trnL GH", Species)
+species_venn <- grid.arrange(
+  add_title(venn_CD_species, "CD"),
+  add_title(venn_CH_species, "CH"),
+  add_title(venn_GH_species, "GH"),
+  ncol = 3
+)
+
+# ---- GENUS ----
+venn_CD_genus <- create_venn(file_paths$CD, "trnL CD", Genus)
+venn_CH_genus <- create_venn(file_paths$CH, "trnL CH", Genus)
+venn_GH_genus <- create_venn(file_paths$GH, "trnL GH", Genus)
+genus_venn <- grid.arrange(
+  add_title(venn_CD_genus, "CD"),
+  add_title(venn_CH_genus, "CH"),
+  add_title(venn_GH_genus, "GH"),
+  ncol = 3
+)
+
+# ---- FAMILY ----
+venn_CD_family <- create_venn(file_paths$CD, "trnL CD", Family)
+venn_CH_family <- create_venn(file_paths$CH, "trnL CH", Family)
+venn_GH_family <- create_venn(file_paths$GH, "trnL GH", Family)
+family_venn <- grid.arrange(
+  add_title(venn_CD_family, "CD"),
+  add_title(venn_CH_family, "CH"),
+  add_title(venn_GH_family, "GH"),
+  ncol = 3
+)
+
+
+# ---- SAVE SPECIES ----
+pdf("./Figure4.pdf", width = 20, height = 6)
+grid.newpage()
+pushViewport(viewport(x = 0.5, y = 0.5, width = 0.95, height = 0.95))
+grid.draw(species_venn)
+popViewport()
+dev.off()
+
+
+# ---- SAVE GENUS ----
+pdf("./SupplementaryFigure2.pdf", width = 20, height = 6)
+grid.newpage()
+pushViewport(viewport(x = 0.5, y = 0.5, width = 0.95, height = 0.95))
+grid.draw(genus_venn)
+popViewport()
+dev.off()
+
+# ---- SAVE FAMILY ----
+pdf("./SupplementaryFigure3.pdf", width = 20, height = 6)
+grid.newpage()
+pushViewport(viewport(x = 0.5, y = 0.5, width = 0.95, height = 0.95))
+grid.draw(family_venn)
+popViewport()
+dev.off()
+```
+
+# Figure 5. Performance metrics across trnL CD, CH, and GH reference databases 
+
+```{R}
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(cowplot)
+library(ggtext)
+
+setwd("/Users/shera/trnL_DB_Classification_and_Eval")
+
+# --- Define base path and load data ---
+base_path <- "./Eval2"
+
+cd_summary <- read.csv(file.path(base_path, "trnL_CD_eval.csv"), stringsAsFactors = FALSE)
+ch_summary <- read.csv(file.path(base_path, "trnL_CH_eval.csv"), stringsAsFactors = FALSE)
+gh_summary <- read.csv(file.path(base_path, "trnL_GH_eval.csv"), stringsAsFactors = FALSE)
+
+# Focus on MRC and MCS only (you can comment those to get the evaluation for all query sets)
+cd_summary <- cd_summary %>%
+  filter(Query_Set %in% c("Mutated_Random_Combination", "Mutated_Common_Species"))
+
+ch_summary <- ch_summary %>%
+  filter(Query_Set %in% c("Mutated_Random_Combination", "Mutated_Common_Species"))
+
+gh_summary <- gh_summary %>%
+  filter(Query_Set %in% c("Mutated_Random_Combination", "Mutated_Common_Species"))
+
+# ---------- base panel ----------
+panel_plot <- function(df, metric, title_lab, hide_y = FALSE, show_xlab = FALSE) {
+
+  df_mod <- df %>%
+    mutate(
+      Metric = .data[[metric]],
+      Databases = factor(
+        Tool,
+        levels = c("Obitools", "Rescript", "Metacurator"),
+        labels = c("OBITools3/ecoPCR", "RESCRIPt", "MetaCurator")
+      ),
+      Highlight_Group = case_when(
+        Query_Set == "Mutated_Common_Species" ~ "Mutated Common Species",
+        Query_Set == "Mutated_Random_Combination" ~ "Mutated Random Combination",
+        TRUE ~ "Other"
+      )
+    )
+
+  pts_df <- df_mod[df_mod$Highlight_Group != "Other", ]
+
+  ggplot(df_mod, aes(x = Databases, y = Metric, fill = Databases)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7,
+                 position = position_dodge2(preserve = "single")) +
+    geom_point(data = pts_df, aes(color = Highlight_Group),
+               position = position_jitter(width = 0.1), size = 2, alpha = 0.9) +
+    coord_cartesian(ylim = c(0, 1)) +
+    scale_x_discrete(
+      labels = c(
+        "OBITools3/ecoPCR" = "O",
+        "RESCRIPt"        = "R",
+        "MetaCurator"     = "M"
+      )
+    ) +
+    labs(title = title_lab, x = "", y = NULL) +
+    theme_bw(base_size = 15) +
+    theme(
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(size = 15, face = "bold", vjust = 1),
+      axis.ticks.x = element_line(),
+      axis.text.y = if (hide_y) element_blank() else element_text(size = 15),
+      axis.ticks.y = if (hide_y) element_blank() else element_line(),
+      plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
+      legend.position = "bottom", legend.box = "vertical"
+    ) +
+    guides(
+      fill  = guide_legend(title = "Database", nrow = 1, byrow = TRUE),
+      color = guide_legend(title = "Query Sets", nrow = 1, byrow = TRUE)
+    ) +
+    scale_color_manual(values = c("Mutated Common Species" = "#E41A1C",
+                                  "Mutated Random Combination" = "#377EB8"))
+}
+
+# ---------- nine panels ----------
+p_cd_fc <- panel_plot(cd_summary, "Species_FC", "FC", hide_y = FALSE, show_xlab = TRUE)
+p_cd_p  <- panel_plot(cd_summary, "Species_P",  "P",  hide_y = TRUE,  show_xlab = FALSE)
+p_cd_r  <- panel_plot(cd_summary, "Species_R",  "R",  hide_y = TRUE,  show_xlab = FALSE)
+
+p_ch_fc <- panel_plot(ch_summary, "Species_FC", "FC", hide_y = TRUE,  show_xlab = FALSE)
+p_ch_p  <- panel_plot(ch_summary, "Species_P",  "P",  hide_y = TRUE,  show_xlab = FALSE)
+p_ch_r  <- panel_plot(ch_summary, "Species_R",  "R",  hide_y = TRUE,  show_xlab = FALSE)
+
+p_gh_fc <- panel_plot(gh_summary, "Species_FC", "FC", hide_y = TRUE,  show_xlab = FALSE)
+p_gh_p  <- panel_plot(gh_summary, "Species_P",  "P",  hide_y = TRUE,  show_xlab = FALSE)
+p_gh_r  <- panel_plot(gh_summary, "Species_R",  "R",  hide_y = TRUE,  show_xlab = FALSE)
+
+# ---------- headers ----------
+h_cd <- ggplot() + theme_void() +
+  ggtitle("**<i>trnL</i> CD**") +
+  theme(plot.title = element_markdown(hjust = 0.5, size = 18, vjust = -6))
+
+h_ch <- ggplot() + theme_void() +
+  ggtitle("**<i>trnL</i> CH**") +
+  theme(plot.title = element_markdown(hjust = 0.5, size = 18, vjust = -6))
+
+h_gh <- ggplot() + theme_void() +
+  ggtitle("**<i>trnL</i> GH**") +
+  theme(plot.title = element_markdown(hjust = 0.5, size = 18, vjust = -6))
+
+# ---------- layout ----------
+design_map <- "
+AAABBBCCC
+DEFGHIJKL
+"
+
+final_plot <-
+  wrap_plots(
+    h_cd, h_ch, h_gh,
+    p_cd_fc, p_cd_p, p_cd_r,
+    p_ch_fc, p_ch_p, p_ch_r,
+    p_gh_fc, p_gh_p, p_gh_r,
+    design  = design_map,
+    heights = c(0.12, 1),
+    guides  = "collect"
+  ) +
+  plot_layout(axis_titles = "collect", widths = rep(1, 6)) &
+  theme(legend.position = "bottom", legend.box = "vertical")
+
+final_plot
+
+ggsave(
+  "./Figure5.pdf",
+  final_plot,
+  width = 12,
+  height = 8,
+  device = "pdf"
+)
+
+```
+

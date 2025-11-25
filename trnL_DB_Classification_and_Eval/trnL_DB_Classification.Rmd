@@ -1,0 +1,408 @@
+---
+title: "trnL_DB_Classification_and_Eval"
+output: html_document
+author: "Ozge Shera Kuddar"
+---
+```{r setup, include=FALSE}
+library(reticulate)
+knitr::opts_chunk$set(engine = "python", python.reticulate.autoprint = FALSE)
+```
+
+# Files:
+#   Databases (fasta): ./DBs_fasta
+#   Databases (taxonomy): ./DBs_taxonomy
+#   Query datasets (fasta and taxonomy files) are located under ./Query
+
+
+# Convert fasta files to DADA2 format for classification (created ./DBs_dada2 folder)
+
+```{r, engine='python'} 
+from Bio import SeqIO
+import csv
+import os
+import sys
+
+os.chdir("/Users/shera/trnL_DB_Classification_and_Eval")
+
+taxonomy_dir = "./DBs_taxonomy"
+fasta_dir = "./DBs_fasta"
+output_dir = "./DBs_dada2"
+
+os.makedirs(output_dir, exist_ok=True)
+
+file_prefixes = [
+    "Obitools_trnl_CD",
+    "Obitools_trnl_CH",
+    "Obitools_trnl_GH",
+    "Rescript_trnl_CD",
+    "Rescript_trnl_CH",
+    "Rescript_trnl_GH",
+    "Metacurator_trnl_CD",
+    "Metacurator_trnl_CH",
+    "Metacurator_trnl_GH"
+]
+
+for base_name in file_prefixes:
+
+    current_csv_path = os.path.join(taxonomy_dir, f"{base_name}.csv")
+    current_fasta_path = os.path.join(fasta_dir, f"{base_name}.fasta")
+    current_output_path = os.path.join(output_dir, f"{base_name}_NBC.fasta")
+
+    taxon_map_dict = {}
+
+    with open(current_csv_path, 'r') as infile_csv:
+        csv_reader_obj = csv.DictReader(infile_csv)
+        for row in csv_reader_obj:
+            acc_value = row["Acc"]
+            taxon_items = [
+                row["Kingdom"], row["Phylum"], row["Class"], row["Order"],
+                row["Family"], row["Genus"], row["Species"]
+            ]
+            formatted_taxon = ";".join(taxon_items).replace(" ", "_")
+            taxon_map_dict[acc_value] = formatted_taxon
+
+    with open(current_output_path, 'w') as outfile_fasta:
+        old_stdout = sys.stdout
+        sys.stdout = open(os.devnull, "w")
+        for seq_record in SeqIO.parse(current_fasta_path, "fasta"):
+            original_id = seq_record.id
+            if original_id in taxon_map_dict:
+                seq_record.description = ""
+                seq_record.id = taxon_map_dict[original_id]
+                SeqIO.write(seq_record, outfile_fasta, "fasta")
+        sys.stdout.close()
+        sys.stdout = old_stdout
+
+    print(f"Updated FASTA written: {current_output_path}")
+```
+
+# Use: Naive Bayes Classifier implemented in DADA2
+
+```{R}
+library(dada2)
+
+set.seed(100) # reproducibility - which I did not use -shame on me- the files I generated, can be found @./Classified_BRC
+
+query_dir <- "./Query"
+ref_dir <- "./DBs_dada2"
+out_dir <- "./Classified"
+dir.create(out_dir, showWarnings = FALSE)
+
+query_prefixes <- c(
+  "Random_Combination",
+  "Common_Species",
+  "Mutated_Random_Combination",
+  "Mutated_Common_Species"
+)
+
+regions <- c("CD", "CH", "GH")
+tools <- c("Obitools", "Rescript", "Metacurator")
+
+task_grid <- expand.grid(
+  QueryPrefix = query_prefixes,
+  Region = regions,
+  Tool = tools,
+  stringsAsFactors = FALSE
+)
+
+query_files <- file.path(
+  query_dir,
+  paste0(task_grid$QueryPrefix, "_", task_grid$Region, ".fasta")
+)
+
+ref_files <- file.path(
+  ref_dir,
+  paste0(task_grid$Tool, "_trnl_", task_grid$Region, "_NBC.fasta")
+)
+
+out_files <- file.path(
+  out_dir,
+  paste0(task_grid$QueryPrefix, "_", task_grid$Region, "_", task_grid$Tool, ".csv")
+)
+
+run_assignment <- function(query_fa, ref_fa, out_csv) {
+  
+  headers <- readLines(query_fa)
+  mock_acc <- gsub("^>", "", headers[grepl("^>", headers)])
+  
+  taxa <- assignTaxonomy(query_fa, ref_fa, multithread = TRUE)
+  df <- as.data.frame(taxa)
+  
+  df$Mock_Acc <- mock_acc
+  df <- df[, c("Mock_Acc", setdiff(colnames(df), "Mock_Acc"))]
+  
+  write.csv(df, out_csv, row.names = FALSE)
+  return(NULL)
+}
+
+mapply(
+  FUN = run_assignment,
+  query_fa = query_files,
+  ref_fa = ref_files,
+  out_csv = out_files,
+  SIMPLIFY = FALSE
+)
+```
+
+
+# Evaluation Step.1
+# Assign Correctly classified (C), Misclassified (M), Unclassified (U) for Species, Genus, Family levels
+
+```{r, engine='python'} 
+import os
+import pandas as pd
+
+def evaluate_predictions():
+
+    query_folder = "./Query" # Query taxonomy files (csv format)
+    prediction_folder = "./Classified_BRC" # This folder contains the the files I generated (fasta format) you can change it to ./Classified
+    output_folder = "./Eval1"
+    os.makedirs(output_folder, exist_ok=True)
+
+    taxonomy_levels = ["Species", "Genus", "Family"]
+
+    # evaluation logic 
+    def evaluate_row(row, mock_taxa):
+        mock_acc = row["Mock_Acc"]
+
+        if mock_acc not in mock_taxa:
+            return {level + "_eval": "U" for level in taxonomy_levels}
+
+        correct = mock_taxa[mock_acc]
+        results = {}
+
+        for level in taxonomy_levels:
+            pred = row.get(level, "")
+            corr = correct.get(level, "")
+
+            if pred == "":
+                results[level + "_eval"] = "U"
+            elif pred == corr:
+                results[level + "_eval"] = "C"
+            else:
+                results[level + "_eval"] = "M"
+
+        return results
+
+    # loop over prediction files
+    for prediction_file in os.listdir(prediction_folder):
+        if not prediction_file.endswith(".csv"):
+            continue
+
+        # remove _Tool_classified.csv
+        core = prediction_file.rsplit("_", 2)[0]
+        # e.g. Mutated_Common_Species_GH
+
+        prefix, region = core.rsplit("_", 1)
+
+        # Mutated queries use NON-mutated taxonomy
+        if prefix.startswith("Mutated_"):
+            taxonomy_prefix = prefix.replace("Mutated_", "", 1)
+        else:
+            taxonomy_prefix = prefix
+
+        mock_csv = os.path.join(query_folder, f"{taxonomy_prefix}_{region}.csv")
+
+        if not os.path.exists(mock_csv):
+            print(f"[ERROR] Mock taxonomy file NOT found for: {prediction_file}")
+            print(f"Expected: {mock_csv}")
+            continue
+
+        # load mock truth taxonomy
+        mock_df = pd.read_csv(mock_csv, dtype=str).fillna("")
+        mock_df["Acc"] = mock_df["Acc"].str.strip()
+        mock_taxa = mock_df.set_index("Acc").to_dict(orient="index")
+
+        # load predictions
+        pred_path = os.path.join(prediction_folder, prediction_file)
+        pred_df = pd.read_csv(pred_path, dtype=str).fillna("")
+
+        pred_df["Mock_Acc"] = pred_df["Mock_Acc"].str.strip()
+
+        # taxonomy formatting
+        for c in taxonomy_levels:
+            if c in pred_df.columns:
+                pred_df[c] = pred_df[c].str.replace("_", " ").str.strip()
+
+        # evaluate
+        eval_df = pred_df.apply(lambda row: evaluate_row(row, mock_taxa), axis=1).apply(pd.Series)
+        pred_df = pd.concat([pred_df, eval_df], axis=1)
+
+        # save output
+        out = prediction_file.replace(".csv", "_eval1.csv")
+        pred_df.to_csv(os.path.join(output_folder, out), index=False)
+
+        print(f"[OK] Evaluated: {prediction_file}  →  {out}")
+
+
+if __name__ == "__main__":
+    evaluate_predictions()
+```
+
+
+# Evaluation Step.2
+# Generate Files for each query sets showing classification (C, M, U) and performance metrics (FC, P, R) 
+
+```{r, engine='python'} 
+import os
+import pandas as pd
+import sys
+
+os.chdir("/Users/shera/trnL_DB_Classification_and_Eval")
+
+eval_folder = "./Eval1"
+output_folder = "./Eval2"
+os.makedirs(output_folder, exist_ok=True)
+
+tools = ["Obitools", "Rescript", "Metacurator"]
+
+n_total = 3000  # total queries per dataset
+
+# FC = (C + M) / n_total
+# P  = C / (C + M)
+# R  = C / n_total
+
+summary_columns = [
+    "Tool",
+    # Species
+    "Species_C", "Species_M", "Species_U",
+    "Species_FC", "Species_P", "Species_R",
+    # Genus
+    "Genus_C", "Genus_M", "Genus_U",
+    "Genus_FC", "Genus_P", "Genus_R",
+    # Family
+    "Family_C", "Family_M", "Family_U",
+    "Family_FC", "Family_P", "Family_R"
+]
+
+all_files = [f for f in os.listdir(eval_folder) if f.endswith("_eval1.csv")]
+
+groups = {}
+
+for file in all_files:
+    base = file.replace("_classified_eval1.csv", "")
+    parts = base.split("_")
+
+    tool = parts[-1]
+    region = parts[-2]
+    query = "_".join(parts[:-2])
+
+    key = f"{query}_{region}"
+
+    if key not in groups:
+        groups[key] = {}
+    groups[key][tool] = file
+
+for key, tool_map in groups.items():
+
+    rows = []
+
+    for tool in tools:
+
+        filename = tool_map.get(tool, None)
+
+        if filename is None:
+            sc = sm = su = 0
+            gc = gm = gu = 0
+            fc = fm = fu = 0
+        else:
+            df = pd.read_csv(os.path.join(eval_folder, filename))
+
+            sc = (df["Species_eval"] == "C").sum()
+            sm = (df["Species_eval"] == "M").sum()
+            su = (df["Species_eval"] == "U").sum()
+
+            gc = (df["Genus_eval"] == "C").sum()
+            gm = (df["Genus_eval"] == "M").sum()
+            gu = (df["Genus_eval"] == "U").sum()
+
+            fc = (df["Family_eval"] == "C").sum()
+            fm = (df["Family_eval"] == "M").sum()
+            fu = (df["Family_eval"] == "U").sum()
+
+        # Species metrics
+        species_fc = round((sc + sm) / n_total, 3) if n_total > 0 else 0
+        species_p  = round(sc / (sc + sm), 3) if (sc + sm) > 0 else 0
+        species_r  = round(sc / n_total, 3) if n_total > 0 else 0
+
+        # Genus metrics
+        genus_fc = round((gc + gm) / n_total, 3) if n_total > 0 else 0
+        genus_p  = round(gc / (gc + gm), 3) if (gc + gm) > 0 else 0
+        genus_r  = round(gc / n_total, 3) if n_total > 0 else 0
+
+        # Family metrics
+        family_fc = round((fc + fm) / n_total, 3) if n_total > 0 else 0
+        family_p  = round(fc / (fc + fm), 3) if (fc + fm) > 0 else 0
+        family_r  = round(fc / n_total, 3) if n_total > 0 else 0
+
+        row = {
+            "Tool": tool,
+
+            # Species
+            "Species_C": sc, "Species_M": sm, "Species_U": su,
+            "Species_FC": species_fc, "Species_P": species_p, "Species_R": species_r,
+
+            # Genus
+            "Genus_C": gc, "Genus_M": gm, "Genus_U": gu,
+            "Genus_FC": genus_fc, "Genus_P": genus_p, "Genus_R": genus_r,
+
+            # Family
+            "Family_C": fc, "Family_M": fm, "Family_U": fu,
+            "Family_FC": family_fc, "Family_P": family_p, "Family_R": family_r
+        }
+
+        rows.append(row)
+
+    df_out = pd.DataFrame(rows, columns=summary_columns)
+
+    output_path = os.path.join(output_folder, f"{key}.csv")
+    df_out.to_csv(output_path, index=False)
+
+    print(f"[OK] Created: {output_path}")
+```
+
+
+# Create summary file for each trnL region 
+
+```{r, engine='python'} 
+import os
+import pandas as pd
+import sys
+
+os.chdir("/Users/shera/trnL_DB_Classification_and_Eval")
+
+input_folder = "./Eval2"
+output_folder = "./Eval2"
+os.makedirs(output_folder, exist_ok=True)
+
+regions = ["CD", "CH", "GH"]
+
+for region in regions:
+
+    combined_rows = []
+
+    region_files = [f for f in os.listdir(input_folder) if f.endswith(f"_{region}.csv")]
+
+    for filename in region_files:
+
+        filepath = os.path.join(input_folder, filename)
+
+        df = pd.read_csv(filepath)
+
+        # extract Query_Set from filename
+        # e.g., "Mutated_Common_Species_CD.csv" → "Mutated_Common_Species"
+        query_set = filename.replace(f"_{region}.csv", "")
+
+        df.insert(0, "Query_Set", query_set)
+
+        combined_rows.append(df)
+
+    # row-bind all 4×3 rows
+    final_df = pd.concat(combined_rows, ignore_index=True)
+
+    output_path = os.path.join(output_folder, f"trnL_{region}_eval.csv")
+    final_df.to_csv(output_path, index=False)
+
+    print(f"[OK] Created: {output_path}")
+```
+
