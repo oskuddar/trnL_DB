@@ -1,4 +1,4 @@
-# Curated Databases:
+# Files and Databases:
 
 All files can be found on Zenodo.
 https://doi.org/10.5281/zenodo.17969450
