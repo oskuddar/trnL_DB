@@ -1,17 +1,13 @@
 # Curated Databases:
 
-**Plain Fasta Format:**
-./trnL_DB_Classification_and_Eval/DBs_fasta
+All files can be found on Zenodo.
+https://doi.org/10.5281/zenodo.17969450
 
-&nbsp;&nbsp;&nbsp;Download from:
-
-**DADA2 Format:**
-./trnL_DB_Classification_and_Eval/DBs_dada2
-
-&nbsp;&nbsp;&nbsp;Download from:
-
-
-**Taxonomy Files:**
-./trnL_DB_Classification_and_Eval/DBs_taxonomy
-
-&nbsp;&nbsp;&nbsp;Download from:
+DBs_fasta: trnL reference databases in FASTA format
+DBs_taxonomy: Corresponding taxonomy files for each trnL database
+DBs_dada2: trnL reference databases formatted for use with the DADA2 classifier
+Classified_BRC: Raw taxonomic classification outputs
+Eval1: Outputs from evaluation step 1
+Eval2: Outputs from evaluation step 2
+Eval2_combined.csv: Combined summary of evaluation results
+Query: Query sequence datasets in FASTA format
