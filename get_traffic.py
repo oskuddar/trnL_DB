@@ -52,7 +52,7 @@ def upload_to_drive(stats):
     }
     media = MediaFileUpload(csv_file, mimetype='text/csv')
 
-    # 4. UPLOAD (and tell Google to allow this even with 0 quota)
+    # 4. UPLOAD
     file = service.files().create(
         body=file_metadata, 
         media_body=media, 
@@ -61,21 +61,21 @@ def upload_to_drive(stats):
     ).execute()
     
     file_id = file.get('id')
-    print(f"File uploaded successfully! ID: {file_id}")
 
-    # 5. TRANSFER OWNERSHIP (This fixes the 'Storage Quota' error)
-    # This moves the file from the "Service Account" to YOU.
+    # 5. TRANSFER OWNERSHIP
     user_permission = {
         'type': 'user',
         'role': 'owner',
-        'emailAddress': 'YOUR_ACTUAL_GMAIL@gmail.com' # <--- CHANGE THIS TO YOUR EMAIL
+        'emailAddress': 'YOUR_REAL_EMAIL@gmail.com' # <--- CHANGE THIS!
     }
     
+    # This specific sequence bypasses the 0GB quota block
     service.permissions().create(
         fileId=file_id,
         body=user_permission,
         transferOwnership=True,
-        supportsAllDrives=True
+        supportsAllDrives=True,
+        moveToNewOwnersRoot=True # This forces it into your storage quota
     ).execute()
 
 if __name__ == "__main__":
