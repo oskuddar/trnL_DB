@@ -1,18 +1,18 @@
 name: Daily Traffic Sync
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch: 
+    - cron: '0 0 * * *' # Runs daily at midnight UTC
+  workflow_dispatch:   # Allows you to click "Run workflow" manually
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # Updated
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # Updated
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
