@@ -24,55 +24,44 @@ OUTPUT_COLUMNS = [
     "cumulative_unique_clones"
 ]
 
-
 def get_github_traffic():
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    today_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # Fetch daily views
+    # Fetch Views
     views_res = requests.get(
         f"https://api.github.com/repos/{REPO}/traffic/views",
         headers=headers,
         params={"per": "day"}
     ).json()
 
-    # Fetch daily clones
+    # Fetch Clones
     clones_res = requests.get(
         f"https://api.github.com/repos/{REPO}/traffic/clones",
         headers=headers,
         params={"per": "day"}
     ).json()
 
-    views_by_date = {
-        view_entry["timestamp"][:10]: {
-            "daily_total_views": view_entry.get("count", 0),
-            "daily_unique_views": view_entry.get("uniques", 0)
-        }
-        for view_entry in views_res.get("views", [])
-    }
+    today_views = {"count": 0, "uniques": 0}
+    today_clones = {"count": 0, "uniques": 0}
 
-    clones_by_date = {
-        clone_entry["timestamp"][:10]: {
-            "daily_total_clones": clone_entry.get("count", 0),
-            "daily_unique_clones": clone_entry.get("uniques", 0)
-        }
-        for clone_entry in clones_res.get("clones", [])
-    }
+    for view_entry in views_res.get("views", []):
+        if view_entry.get("timestamp", "")[:10] == today_date:
+            today_views = view_entry
+            break
 
-    available_dates = sorted(set(views_by_date) | set(clones_by_date))
-
-    if available_dates:
-        report_date = available_dates[-1]
-    else:
-        report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for clone_entry in clones_res.get("clones", []):
+        if clone_entry.get("timestamp", "")[:10] == today_date:
+            today_clones = clone_entry
+            break
 
     return {
-        "date": report_date,
-        "daily_total_views": views_by_date.get(report_date, {}).get("daily_total_views", 0),
-        "daily_unique_views": views_by_date.get(report_date, {}).get("daily_unique_views", 0),
-        "daily_total_clones": clones_by_date.get(report_date, {}).get("daily_total_clones", 0),
-        "daily_unique_clones": clones_by_date.get(report_date, {}).get("daily_unique_clones", 0)
+        "date": today_date,
+        "daily_total_views": today_views.get("count", 0),
+        "daily_unique_views": today_views.get("uniques", 0),
+        "daily_total_clones": today_clones.get("count", 0),
+        "daily_unique_clones": today_clones.get("uniques", 0)
     }
-
 
 def update_drive_file(current_stats):
     with open("credentials.json", "w") as f:
@@ -85,8 +74,8 @@ def update_drive_file(current_stats):
     request = service.files().export_media(fileId=FILE_ID, mimeType="text/csv")
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request)
-
     done = False
+
     while done is False:
         status, done = downloader.next_chunk()
 
@@ -100,21 +89,14 @@ def update_drive_file(current_stats):
     if df.empty:
         df = pd.DataFrame(columns=OUTPUT_COLUMNS)
 
-    # 2. Convert old column names if the previous CSV used the original format
-    old_column_map = {
-        "daily_new_views": "daily_total_views",
-        "daily_new_clones": "daily_total_clones"
-    }
-
-    df = df.rename(columns=old_column_map)
-
+    # 2. Keep the required columns
     for column_name in OUTPUT_COLUMNS:
         if column_name not in df.columns:
             df[column_name] = 0
 
     df = df[OUTPUT_COLUMNS]
 
-    # 3. Clean dates and numeric columns
+    # 3. Clean existing data
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     df = df.dropna(subset=["date"])
 
@@ -125,7 +107,7 @@ def update_drive_file(current_stats):
         errors="coerce"
     ).fillna(0).astype(int)
 
-    # 4. Add only one row for the latest daily GitHub report
+    # 4. Add today's row only
     new_row = pd.DataFrame([current_stats])
 
     for column_name in OUTPUT_COLUMNS:
@@ -134,7 +116,6 @@ def update_drive_file(current_stats):
 
     new_row = new_row[OUTPUT_COLUMNS]
     new_row["date"] = pd.to_datetime(new_row["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-
     new_row[numeric_columns] = new_row[numeric_columns].apply(
         pd.to_numeric,
         errors="coerce"
@@ -142,11 +123,11 @@ def update_drive_file(current_stats):
 
     df = pd.concat([df, new_row], ignore_index=True)
 
-    # 5. Prevent duplicate dates if the workflow is run more than once on the same day
+    # 5. Prevent duplicate row if workflow runs more than once today
     df = df.sort_values("date")
     df = df.drop_duplicates(subset=["date"], keep="last")
 
-    # 6. Calculate cumulative totals from saved daily rows
+    # 6. Recalculate cumulative columns from saved daily rows
     df["cumulative_total_views"] = df["daily_total_views"].cumsum()
     df["cumulative_unique_views"] = df["daily_unique_views"].cumsum()
     df["cumulative_total_clones"] = df["daily_total_clones"].cumsum()
@@ -161,16 +142,11 @@ def update_drive_file(current_stats):
     media = MediaFileUpload(local_csv, mimetype="text/csv")
     service.files().update(fileId=FILE_ID, media_body=media).execute()
 
-    latest_row = df.iloc[-1]
-
     print(
-        f"Update complete. Date: {latest_row['date']}. "
-        f"Daily views: {latest_row['daily_total_views']}. "
-        f"Daily clones: {latest_row['daily_total_clones']}. "
-        f"Cumulative views: {latest_row['cumulative_total_views']}. "
-        f"Cumulative clones: {latest_row['cumulative_total_clones']}."
+        f"Update complete. Date: {current_stats['date']}. "
+        f"Daily views: {current_stats['daily_total_views']}. "
+        f"Daily clones: {current_stats['daily_total_clones']}."
     )
-
 
 if __name__ == "__main__":
     data = get_github_traffic()
