@@ -24,7 +24,7 @@ OUTPUT_COLUMNS = [
 ]
 
 
-def get_github_traffic_daily_rows():
+def get_github_traffic_daily_row():
     github_headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json"
@@ -64,19 +64,26 @@ def get_github_traffic_daily_rows():
         for traffic_clone_entry in github_clones_payload.get("clones", [])
     }
 
-    all_available_dates = sorted(set(daily_views_by_date) | set(daily_clones_by_date))
+    available_traffic_dates = sorted(set(daily_views_by_date) | set(daily_clones_by_date))
 
-    github_daily_traffic_rows = []
-    for traffic_date_value in all_available_dates:
-        github_daily_traffic_rows.append({
-            "date": traffic_date_value,
-            "daily_total_views": daily_views_by_date.get(traffic_date_value, {}).get("daily_total_views", 0),
-            "daily_unique_views": daily_views_by_date.get(traffic_date_value, {}).get("daily_unique_views", 0),
-            "daily_total_clones": daily_clones_by_date.get(traffic_date_value, {}).get("daily_total_clones", 0),
-            "daily_unique_clones": daily_clones_by_date.get(traffic_date_value, {}).get("daily_unique_clones", 0)
-        })
+    if not available_traffic_dates:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
-    return pd.DataFrame(github_daily_traffic_rows)
+    latest_traffic_date = available_traffic_dates[-1]
+
+    latest_traffic_row = {
+        "date": latest_traffic_date,
+        "daily_total_views": daily_views_by_date.get(latest_traffic_date, {}).get("daily_total_views", 0),
+        "daily_unique_views": daily_views_by_date.get(latest_traffic_date, {}).get("daily_unique_views", 0),
+        "daily_total_clones": daily_clones_by_date.get(latest_traffic_date, {}).get("daily_total_clones", 0),
+        "daily_unique_clones": daily_clones_by_date.get(latest_traffic_date, {}).get("daily_unique_clones", 0),
+        "cumulative_total_views": 0,
+        "cumulative_unique_views": 0,
+        "cumulative_total_clones": 0,
+        "cumulative_unique_clones": 0
+    }
+
+    return pd.DataFrame([latest_traffic_row])
 
 
 def get_google_drive_service():
@@ -114,25 +121,23 @@ def standardize_existing_traffic_table(existing_traffic_table):
     if existing_traffic_table.empty:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
-    legacy_column_map = {
-        "total_views": "daily_total_views",
-        "unique_views": "daily_unique_views",
-        "total_clones": "daily_total_clones",
-        "unique_clones": "daily_unique_clones",
-        "daily_new_views": "daily_total_views",
-        "daily_new_clones": "daily_total_clones"
-    }
-
-    standardized_traffic_table = existing_traffic_table.rename(columns=legacy_column_map).copy()
+    standardized_traffic_table = existing_traffic_table.copy()
 
     if "date" not in standardized_traffic_table.columns:
         standardized_traffic_table["date"] = pd.NaT
+
+    if "daily_total_views" not in standardized_traffic_table.columns and "daily_new_views" in standardized_traffic_table.columns:
+        standardized_traffic_table["daily_total_views"] = standardized_traffic_table["daily_new_views"]
+
+    if "daily_total_clones" not in standardized_traffic_table.columns and "daily_new_clones" in standardized_traffic_table.columns:
+        standardized_traffic_table["daily_total_clones"] = standardized_traffic_table["daily_new_clones"]
 
     for required_column_name in OUTPUT_COLUMNS:
         if required_column_name not in standardized_traffic_table.columns:
             standardized_traffic_table[required_column_name] = 0
 
     standardized_traffic_table = standardized_traffic_table[OUTPUT_COLUMNS]
+
     standardized_traffic_table["date"] = pd.to_datetime(
         standardized_traffic_table["date"],
         errors="coerce"
@@ -141,6 +146,7 @@ def standardize_existing_traffic_table(existing_traffic_table):
     standardized_traffic_table = standardized_traffic_table.dropna(subset=["date"])
 
     numeric_traffic_columns = [column_name for column_name in OUTPUT_COLUMNS if column_name != "date"]
+
     standardized_traffic_table[numeric_traffic_columns] = standardized_traffic_table[numeric_traffic_columns].apply(
         pd.to_numeric,
         errors="coerce"
@@ -180,10 +186,10 @@ def update_drive_file():
 
     existing_traffic_table = download_existing_traffic_table(google_drive_service)
     standardized_traffic_table = standardize_existing_traffic_table(existing_traffic_table)
-    github_daily_traffic_table = get_github_traffic_daily_rows()
+    github_latest_daily_traffic_table = get_github_traffic_daily_row()
 
     combined_traffic_table = pd.concat(
-        [standardized_traffic_table, github_daily_traffic_table],
+        [standardized_traffic_table, github_latest_daily_traffic_table],
         ignore_index=True
     )
 
@@ -205,6 +211,7 @@ def update_drive_file():
     google_drive_service.files().update(fileId=FILE_ID, media_body=upload_media).execute()
 
     latest_traffic_row = updated_traffic_table.iloc[-1]
+
     print(
         "Update complete. "
         f"Latest date: {latest_traffic_row['date']}. "
