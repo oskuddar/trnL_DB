@@ -20,11 +20,7 @@ OUTPUT_COLUMNS = [
     "cumulative_total_views",
     "cumulative_unique_views",
     "cumulative_total_clones",
-    "cumulative_unique_clones",
-    "github_14d_total_views",
-    "github_14d_unique_views",
-    "github_14d_total_clones",
-    "github_14d_unique_clones"
+    "cumulative_unique_clones"
 ]
 
 
@@ -70,21 +66,17 @@ def get_github_traffic_daily_rows():
 
     all_available_dates = sorted(set(daily_views_by_date) | set(daily_clones_by_date))
 
-    github_daily_rows = []
+    github_daily_traffic_rows = []
     for traffic_date_value in all_available_dates:
-        github_daily_rows.append({
+        github_daily_traffic_rows.append({
             "date": traffic_date_value,
             "daily_total_views": daily_views_by_date.get(traffic_date_value, {}).get("daily_total_views", 0),
             "daily_unique_views": daily_views_by_date.get(traffic_date_value, {}).get("daily_unique_views", 0),
             "daily_total_clones": daily_clones_by_date.get(traffic_date_value, {}).get("daily_total_clones", 0),
-            "daily_unique_clones": daily_clones_by_date.get(traffic_date_value, {}).get("daily_unique_clones", 0),
-            "github_14d_total_views": github_views_payload.get("count", 0),
-            "github_14d_unique_views": github_views_payload.get("uniques", 0),
-            "github_14d_total_clones": github_clones_payload.get("count", 0),
-            "github_14d_unique_clones": github_clones_payload.get("uniques", 0)
+            "daily_unique_clones": daily_clones_by_date.get(traffic_date_value, {}).get("daily_unique_clones", 0)
         })
 
-    return pd.DataFrame(github_daily_rows)
+    return pd.DataFrame(github_daily_traffic_rows)
 
 
 def get_google_drive_service():
@@ -123,22 +115,29 @@ def standardize_existing_traffic_table(existing_traffic_table):
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     legacy_column_map = {
-        "total_views": "github_14d_total_views",
-        "unique_views": "github_14d_unique_views",
-        "total_clones": "github_14d_total_clones",
-        "unique_clones": "github_14d_unique_clones",
+        "total_views": "daily_total_views",
+        "unique_views": "daily_unique_views",
+        "total_clones": "daily_total_clones",
+        "unique_clones": "daily_unique_clones",
         "daily_new_views": "daily_total_views",
         "daily_new_clones": "daily_total_clones"
     }
 
     standardized_traffic_table = existing_traffic_table.rename(columns=legacy_column_map).copy()
 
+    if "date" not in standardized_traffic_table.columns:
+        standardized_traffic_table["date"] = pd.NaT
+
     for required_column_name in OUTPUT_COLUMNS:
         if required_column_name not in standardized_traffic_table.columns:
             standardized_traffic_table[required_column_name] = 0
 
     standardized_traffic_table = standardized_traffic_table[OUTPUT_COLUMNS]
-    standardized_traffic_table["date"] = pd.to_datetime(standardized_traffic_table["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    standardized_traffic_table["date"] = pd.to_datetime(
+        standardized_traffic_table["date"],
+        errors="coerce"
+    ).dt.strftime("%Y-%m-%d")
+
     standardized_traffic_table = standardized_traffic_table.dropna(subset=["date"])
 
     numeric_traffic_columns = [column_name for column_name in OUTPUT_COLUMNS if column_name != "date"]
@@ -188,7 +187,11 @@ def update_drive_file():
         ignore_index=True
     )
 
-    combined_traffic_table["date"] = pd.to_datetime(combined_traffic_table["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    combined_traffic_table["date"] = pd.to_datetime(
+        combined_traffic_table["date"],
+        errors="coerce"
+    ).dt.strftime("%Y-%m-%d")
+
     combined_traffic_table = combined_traffic_table.dropna(subset=["date"])
     combined_traffic_table = combined_traffic_table.sort_values("date")
     combined_traffic_table = combined_traffic_table.drop_duplicates(subset=["date"], keep="last")
@@ -205,6 +208,8 @@ def update_drive_file():
     print(
         "Update complete. "
         f"Latest date: {latest_traffic_row['date']}. "
+        f"Daily views: {latest_traffic_row['daily_total_views']}. "
+        f"Daily clones: {latest_traffic_row['daily_total_clones']}. "
         f"Cumulative views: {latest_traffic_row['cumulative_total_views']}. "
         f"Cumulative clones: {latest_traffic_row['cumulative_total_clones']}."
     )
